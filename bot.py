@@ -4,15 +4,15 @@ Runs as a userbot on your MAX account (PyMax library) and posts through a Telegr
 Only the chat set in MAX_CHAT_ID is forwarded; every other chat is ignored.
 """
 import asyncio
-import base64
 import html
 import logging
 import os
+import sys
 from pathlib import Path
 
 import aiohttp
 from dotenv import load_dotenv
-from pymax import Client, Message
+from pymax import Client, ExtraConfig, Message
 from pymax.types.domain import (
     AudioAttachment,
     FileAttachment,
@@ -34,15 +34,27 @@ TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 TG_UPLOAD_LIMIT = 50 * 1024 * 1024  # Bot API upload limit
 CAPTION_LIMIT = 1024
 
-SESSION_DIR = Path("session")
+# DATA_DIR survives restarts on the hosting; locally the session lives in ./session.
+SESSION_DIR = Path(os.getenv("DATA_DIR", "session"))
+SESSION_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_FILE = SESSION_DIR / "session.db"
-# On hosting there is no console for the SMS code, so the saved session comes from an env var.
-if os.getenv("MAX_SESSION") and not SESSION_FILE.exists():
-    SESSION_DIR.mkdir(exist_ok=True)
-    SESSION_FILE.write_bytes(base64.b64decode(os.environ["MAX_SESSION"]))
+# On hosting there is no console for the SMS code, so the login token from a local
+# session comes from env vars. relogin=False: never fall back to SMS on the server.
+MAX_TOKEN = os.getenv("MAX_TOKEN")
+extra_config = (
+    ExtraConfig(
+        token=MAX_TOKEN,
+        device_id=os.getenv("MAX_DEVICE_ID") or None,
+        mt_instance_id=os.getenv("MAX_MT_INSTANCE_ID") or None,
+        relogin=False,
+    )
+    if MAX_TOKEN
+    else None
+)
+CAN_LOGIN = SESSION_FILE.exists() or MAX_TOKEN or sys.stdin.isatty()
 
 log = logging.getLogger("bridge")
-client = Client(phone=MAX_PHONE, work_dir=str(SESSION_DIR))
+client = Client(phone=MAX_PHONE, work_dir=str(SESSION_DIR), extra_config=extra_config)
 http: aiohttp.ClientSession | None = None
 send_lock = asyncio.Lock()
 
@@ -186,6 +198,11 @@ async def forward(message: Message) -> None:
 async def main():
     global http
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if not CAN_LOGIN:
+        # Without a console the SMS code cannot be entered; idle instead of crashing,
+        # so the hosting does not restart the bot and request SMS codes in a loop.
+        log.error("Нет сессии MAX и не задан MAX_TOKEN. Задайте MAX_TOKEN и MAX_DEVICE_ID и перезапустите бота.")
+        await asyncio.Event().wait()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as http:
         await client.start()
 

@@ -29,12 +29,12 @@
 Файлы `.env` и `session/` в репозиторий не попадают: в них токен и доступ к аккаунту. На хостинге задайте те же значения как переменные окружения.
 
 1. Войдите один раз на своём компьютере, чтобы появился `session/session.db`.
-2. Получите содержимое сессии в base64:
+2. Достаньте из сессии токен входа:
 
    ```bash
-   python -c "import base64;print(base64.b64encode(open('session/session.db','rb').read()).decode())"
+   python -c "import sqlite3;r=sqlite3.connect('session/session.db').execute('select token,device_id,mt_instance_id from sessions').fetchone();print(f'MAX_TOKEN={r[0]}\nMAX_DEVICE_ID={r[1]}\nMAX_MT_INSTANCE_ID={r[2]}')"
    ```
 
-3. На хостинге задайте переменные `MAX_PHONE`, `MAX_CHAT_ID`, `TG_TOKEN`, `TG_CHAT_ID`, `TG_THREAD_ID` и `MAX_SESSION` (строка из шага 2).
+3. На хостинге задайте переменные `MAX_PHONE`, `MAX_CHAT_ID`, `TG_TOKEN`, `TG_CHAT_ID`, `TG_THREAD_ID`, три строки из шага 2 и `DATA_DIR` (постоянная папка хостинга, например `/app/data`). На сервере бот никогда не запрашивает SMS-код: без токена он пишет ошибку в лог и ждёт.
 4. Команда запуска: `python bot.py`.
 5. Остановите бота на компьютере, иначе сообщения будут приходить дважды.

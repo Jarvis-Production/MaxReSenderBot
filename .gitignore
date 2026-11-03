@@ -4,4 +4,4 @@ session/
 __pycache__/
 *.zip
 marker.json
-max_session.txt
+hosting_env.txt
