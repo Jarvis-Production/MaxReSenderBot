@@ -1,0 +1,6 @@
+.env
+session/
+.venv/
+__pycache__/
+*.zip
+marker.json
