@@ -7,7 +7,6 @@ import asyncio
 import html
 import logging
 import os
-import sys
 from pathlib import Path
 
 import aiohttp
@@ -51,7 +50,9 @@ extra_config = (
     if MAX_TOKEN
     else None
 )
-CAN_LOGIN = SESSION_FILE.exists() or MAX_TOKEN or sys.stdin.isatty()
+# SMS login only on a local run: the hosting sets DATA_DIR and has no console for the code
+# (its Docker stdin may still look like a TTY, so isatty() is not a reliable check).
+CAN_LOGIN = SESSION_FILE.exists() or bool(MAX_TOKEN) or not os.getenv("DATA_DIR")
 
 log = logging.getLogger("bridge")
 client = Client(phone=MAX_PHONE, work_dir=str(SESSION_DIR), extra_config=extra_config)
@@ -198,6 +199,12 @@ async def forward(message: Message) -> None:
 async def main():
     global http
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    log.info(
+        "Настройки: MAX_TOKEN %s, сессия %s, MAX_CHAT_ID=%s",
+        "задан" if MAX_TOKEN else "НЕ задан",
+        "найдена" if SESSION_FILE.exists() else "не найдена",
+        MAX_CHAT_ID,
+    )
     if not CAN_LOGIN:
         # Without a console the SMS code cannot be entered; idle instead of crashing,
         # so the hosting does not restart the bot and request SMS codes in a loop.
